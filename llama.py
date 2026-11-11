@@ -50,7 +50,11 @@ class RMSNorm(torch.nn.Module):
             torch.Tensor: The normalized tensor.
         """
         # todo
-        raise NotImplementedError
+        mean_square = x.pow(2).mean(dim=-1, keepdim=True)
+
+        inverse_rms = torch.rsqrt(mean_square + self.eps)
+
+        return x * inverse_rms  
 
     def forward(self, x):
         """
@@ -103,7 +107,14 @@ class Attention(nn.Module):
         not use one).
         '''
         # todo
-        raise NotImplementedError
+        scores = torch.matmul(query, key.transpose(-2, -1))
+        scores = scores / math.sqrt(self.head_dim)
+
+        attention_weights = torch.softmax(scores, dim=-1)
+        attention_weights = self.attn_dropout(attention_weights)
+
+        output = torch.matmul(attention_weights, value)
+        return output
 
     def forward(
         self,
@@ -206,7 +217,15 @@ class LlamaLayer(nn.Module):
            output of the feed-forward network
         '''
         # todo
-        raise NotImplementedError
+        normalized_x = self.attention_norm(x)
+
+        h = x + self.attention(normalized_x)
+
+        normalized_h = self.ffn_norm(h)
+
+        output = h + self.feed_forward(normalized_h)
+
+        return output
 
 class Llama(LlamaPreTrainedModel):
     def __init__(self, config: LlamaConfig):
@@ -269,7 +288,21 @@ class Llama(LlamaPreTrainedModel):
         _batch_size, seqlen = tokens.shape
             
         # todo
-        raise NotImplementedError
+        h = self.tok_embeddings(tokens)
+        h = self.dropout(h)
+
+        for layer in self.layers:
+            h = layer(h)
+
+        h = self.norm(h)
+
+        if targets is not None:
+            logits = self.output(h)
+        else:
+            logits = self.output(h[:, [-1], :])
+
+        return logits, h
+
 
     @torch.inference_mode()
     def generate(self, idx, max_new_tokens, temperature=1.0):
@@ -303,7 +336,12 @@ class Llama(LlamaPreTrainedModel):
                 Note that we are not using top-k sampling/nucleus sampling in this procedure.
                 '''
                 # todo
-                raise NotImplementedError
+                scaled_logits = logits / temperature
+
+                probs = torch.softmax(scaled_logits, dim=-1)
+                
+                idx_next = torch.multinomial(probs, num_samples=1)
+
             # append sampled index to the running sequence and continue
             idx = torch.cat((idx, idx_next), dim=1)
 

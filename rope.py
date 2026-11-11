@@ -57,7 +57,7 @@ def apply_rotary_emb(
     _, seqlen, _, _ = query.shape
     device = query.device
     # todo
-    #
+ 
     # Please refer to Section 3 in https://arxiv.org/abs/2104.09864.
 
     # reshape xq and xk to match the complex representation
@@ -68,11 +68,24 @@ def apply_rotary_emb(
 
     # First, compute the trigonometric values in the second and fourth columns in
     # equation (34) of the paper (linked above).
+    freqs = 1.0 / (theta ** (torch.arange(0, head_dim, 2, device=device).float()/ head_dim))
+
+    positions = torch.arange(seqlen, device=device)
+    angles = torch.outer(positions, freqs)
+
+    cos_vals = reshape_for_broadcast(torch.cos(angles), query_real)
+
+    sin_vals = reshape_for_broadcast(torch.sin(angles), query_real)
 
     # Then, combine these trigonometric values with the tensors query_real, query_imag,
     # key_real, and key_imag.
 
-    raise NotImplementedError
+    query_out_real = query_real * cos_vals - query_imag * sin_vals
+    query_out_imag = query_real * sin_vals + query_imag * cos_vals
+
+    key_out_real = key_real * cos_vals - key_imag * sin_vals
+    key_out_imag = key_real * sin_vals + key_imag * cos_vals
+
 
     # Re-interleave the rotated pairs back into the original head_dim layout.
     query_out = torch.stack((query_out_real, query_out_imag), dim=-1).flatten(3).type_as(query)
